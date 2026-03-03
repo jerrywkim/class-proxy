@@ -1,9 +1,24 @@
 export default async function handler(req, res) {
+  // =========================
+  // CORS HEADERS (ADD THIS)
+  // =========================
+  res.setHeader("Access-Control-Allow-Origin", "http://localhost:8000");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // Handle preflight request
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  // =========================
+  // EXISTING LOGIC CONTINUES
+  // =========================
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { passcode, groupId, messages } = req.body || {};
+  const { passcode, messages } = req.body;
 
   // Simple class passcode gate
   if (passcode !== process.env.CLASS_PASSCODE) {
