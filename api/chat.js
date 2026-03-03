@@ -42,7 +42,7 @@ export default async function handler(req, res) {
         model: "gpt-4.1-nano",
         input: trimmed.map((m) => ({
           role: m.role,
-          content: [{ type: "input_text", text: String(m.content || "") }],
+          content: String(m.content || ""),
         })),
         max_output_tokens: 250,
         temperature: 0.7,
