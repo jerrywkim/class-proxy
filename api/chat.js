@@ -1,57 +1,46 @@
 export default async function handler(req, res) {
-  // =========================
-  // CORS HEADERS (ADD THIS)
-  // =========================
+  // ---- CORS (allow from localhost; use * for class if you want) ----
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // Handle preflight request
+  // Preflight
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  // =========================
-  // EXISTING LOGIC CONTINUES
-  // =========================
+  // Only POST
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { passcode, messages } = req.body;
-
-  // Simple class passcode gate
-  if (passcode !== process.env.CLASS_PASSCODE) {
-    return res.status(403).json({ error: "Invalid passcode" });
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    return res.status(500).json({ error: "Server missing OPENAI_API_KEY" });
-  }
-
-  if (!Array.isArray(messages)) {
-    return res.status(400).json({ error: "messages must be an array" });
-  }
-
-  // Optional: clamp groups to group1..group10
-  const g = String(groupId || "group1").toLowerCase().trim();
-  if (!/^group([1-9]|10)$/.test(g)) {
-    return res.status(400).json({ error: "groupId must be group1..group10" });
-  }
-
-  // Guardrails: trim history
-  const trimmed = messages.slice(-10);
-
   try {
+    const { passcode, messages } = req.body || {};
+
+    if (passcode !== process.env.CLASS_PASSCODE) {
+      return res.status(403).json({ error: "Invalid passcode" });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: "Server missing OPENAI_API_KEY" });
+    }
+
+    if (!Array.isArray(messages)) {
+      return res.status(400).json({ error: "messages must be an array" });
+    }
+
+    // Trim history to control cost
+    const trimmed = messages.slice(-10);
+
     const resp = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4.1-nano", // or gpt-4.1-mini, etc.
-        input: trimmed.map(m => ({
+        model: "gpt-4.1-nano",
+        input: trimmed.map((m) => ({
           role: m.role,
           content: [{ type: "input_text", text: String(m.content || "") }],
         })),
@@ -70,7 +59,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Extract assistant text from Responses API output
+    // Extract assistant text
     let text = "";
     for (const item of data.output || []) {
       if (item.type === "message" && item.role === "assistant") {
@@ -82,6 +71,10 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ text: text || "(No text returned.)" });
   } catch (err) {
-    return res.status(500).json({ error: err?.message || "Unknown error" });
+    // IMPORTANT: still returns JSON with CORS headers already set above
+    return res.status(500).json({
+      error: "Proxy crashed",
+      message: err?.message || String(err),
+    });
   }
 }
